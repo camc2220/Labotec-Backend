@@ -69,11 +69,23 @@ app.MapControllers();
 using (var scope = app.Services.CreateScope())
 {
     var ctx = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    if ((await ctx.Database.GetPendingMigrationsAsync()).Any())
+
+    // Ejecuta automáticamente las migraciones pendientes al iniciar la API
+    var pending = await ctx.Database.GetPendingMigrationsAsync();
+    if (pending.Any())
+    {
+        Console.WriteLine($"Aplicando {pending.Count()} migraciones pendientes...");
         await ctx.Database.MigrateAsync();
+        Console.WriteLine("Migraciones aplicadas correctamente.");
+    }
     else
-        await ctx.Database.EnsureCreatedAsync();
+    {
+        Console.WriteLine("No hay migraciones pendientes. La base de datos está actualizada.");
+    }
+
+    // Ejecuta el seeding de datos iniciales (usuarios, roles, etc.)
     await Seed.Run(scope.ServiceProvider);
 }
+
 
 app.Run();
