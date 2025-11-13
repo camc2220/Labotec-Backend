@@ -60,9 +60,26 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "Labotec API", Version = "v1" });
-    var bearer = new OpenApiSecurityScheme { Name="Authorization", Type=SecuritySchemeType.Http, Scheme="bearer", BearerFormat="JWT", In=ParameterLocation.Header };
+    var bearer = new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Description = "Ingrese el token JWT en el formato **Bearer {token}**.",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Reference = new OpenApiReference
+        {
+            Type = ReferenceType.SecurityScheme,
+            Id = "Bearer"
+        }
+    };
+
     c.AddSecurityDefinition("Bearer", bearer);
-    c.AddSecurityRequirement(new OpenApiSecurityRequirement { { bearer, Array.Empty<string>() } });
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        { bearer, Array.Empty<string>() }
+    });
 });
 
 var provider = builder.Configuration.GetValue<string>("Storage:Provider")?.ToLowerInvariant() ?? "file";
@@ -72,7 +89,10 @@ else builder.Services.AddScoped<IStorageService, FileStorageService>();
 var app = builder.Build();
 
 app.UseSwagger();
-app.UseSwaggerUI();
+app.UseSwaggerUI(options =>
+{
+    options.EnablePersistAuthorization();
+});
 app.UseSerilogRequestLogging();
 app.UseHttpsRedirection();
 app.UseStaticFiles();
