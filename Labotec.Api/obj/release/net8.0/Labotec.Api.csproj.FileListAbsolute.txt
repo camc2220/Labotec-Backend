@@ -128,3 +128,4 @@ C:\Users\Camc2\OneDrive - Universidad Autonoma de Santo Domingo\Documentos\Repos
 C:\Users\Camc2\OneDrive - Universidad Autonoma de Santo Domingo\Documentos\Repositorios\Labotec-Backend\Labotec.Api\obj\release\net8.0\Labotec.Api.pdb
 C:\Users\Camc2\OneDrive - Universidad Autonoma de Santo Domingo\Documentos\Repositorios\Labotec-Backend\Labotec.Api\obj\release\net8.0\Labotec.Api.genruntimeconfig.cache
 C:\Users\Camc2\OneDrive - Universidad Autonoma de Santo Domingo\Documentos\Repositorios\Labotec-Backend\Labotec.Api\obj\release\net8.0\ref\Labotec.Api.dll
+C:\Users\Camc2\OneDrive - Universidad Autonoma de Santo Domingo\Documentos\Repositorios\Labotec-Backend\Labotec.Api\bin\release\net8.0\Labotec.Api.staticwebassets.runtime.json
