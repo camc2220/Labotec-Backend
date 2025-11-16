@@ -72,10 +72,13 @@ else builder.Services.AddScoped<IStorageService, FileStorageService>();
 var app = builder.Build();
 
 app.UseSwagger();
-app.UseSwaggerUI();
+app.UseStaticFiles();
+app.UseSwaggerUI(c =>
+{
+    c.InjectJavascript("/swagger/swagger-custom.js");
+});
 app.UseSerilogRequestLogging();
 app.UseHttpsRedirection();
-app.UseStaticFiles();
 app.UseCors("AppCors");
 app.UseAuthentication();
 app.UseAuthorization();
