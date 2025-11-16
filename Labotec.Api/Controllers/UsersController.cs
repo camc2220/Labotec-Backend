@@ -146,7 +146,7 @@ public class UsersController : ControllerBase
             user.Id,
             user.UserName,
             user.Email,
-            roles,
+            roles.ToList().AsReadOnly(),
             isLocked,
             lockoutEnd);
     }
