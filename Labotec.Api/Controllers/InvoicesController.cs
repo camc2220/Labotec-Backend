@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using Labotec.Api.Common;
 using Labotec.Api.Data;
 using Labotec.Api.DTOs;
@@ -48,6 +50,67 @@ public class InvoicesController : ControllerBase
             .ToListAsync();
 
         return Ok(new PagedResult<InvoiceReadDto>(data, page, pageSize, total));
+    }
+
+    [HttpGet("print")]
+    public async Task<IActionResult> Print(
+        [FromQuery] Guid? patientId,
+        [FromQuery] bool? paid,
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        [FromQuery] string? sortBy = null,
+        [FromQuery] string sortDir = "asc")
+    {
+        var q = _db.Invoices.AsNoTracking().Include(i => i.Patient).AsQueryable();
+        var currentPatientId = User.GetPatientId();
+        if (currentPatientId.HasValue)
+        {
+            q = q.Where(i => i.PatientId == currentPatientId.Value);
+        }
+        else if (patientId.HasValue)
+        {
+            q = q.Where(i => i.PatientId == patientId.Value);
+        }
+        if (paid.HasValue) q = q.Where(i => i.Paid == paid.Value);
+        if (from.HasValue) q = q.Where(i => i.IssuedAt >= from.Value);
+        if (to.HasValue) q = q.Where(i => i.IssuedAt <= to.Value);
+
+        var data = await q
+            .ApplyOrdering(sortBy, sortDir)
+            .Select(i => new
+            {
+                i.Id,
+                i.PatientId,
+                PatientName = i.Patient.FullName,
+                i.Number,
+                i.Amount,
+                i.IssuedAt,
+                i.Paid
+            })
+            .ToListAsync();
+
+        var rows = new List<IEnumerable<string?>>
+        {
+            new[] { "ID", "Paciente", "Número", "Monto", "Fecha", "Pagado" }
+        };
+
+        foreach (var item in data)
+        {
+            rows.Add(new[]
+            {
+                item.Id.ToString(),
+                item.PatientName,
+                item.Number,
+                item.Amount.ToString("0.00", CultureInfo.InvariantCulture),
+                item.IssuedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                item.Paid ? "Sí" : "No"
+            });
+        }
+
+        var csv = CsvBuilder.Build(rows);
+        var bytes = Encoding.UTF8.GetBytes(csv);
+        var fileName = $"facturas-{DateTime.UtcNow:yyyyMMddHHmmss}.csv";
+        return File(bytes, "text/csv", fileName);
     }
 
     [HttpPost]
