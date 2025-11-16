@@ -1,3 +1,4 @@
+
 using Labotec.Api.Auth;
 using Labotec.Api.Data;
 using Labotec.Api.Storage;
@@ -12,15 +13,30 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Host.UseSerilog((ctx, lc) => lc.ReadFrom.Configuration(ctx.Configuration).Enrich.FromLogContext().WriteTo.Console());
+// =======================
+// SERILOG
+// =======================
+builder.Host.UseSerilog((ctx, lc) => lc
+    .ReadFrom.Configuration(ctx.Configuration)
+    .Enrich.FromLogContext()
+    .WriteTo.Console());
 
+// =======================
+// DB CONTEXT (MySQL)
+// =======================
 var cs = builder.Configuration.GetConnectionString("Default");
-builder.Services.AddDbContext<AppDbContext>(opt => opt.UseMySql(cs, ServerVersion.AutoDetect(cs)));
+builder.Services.AddDbContext<AppDbContext>(opt =>
+    opt.UseMySql(cs, ServerVersion.AutoDetect(cs)));
 
-builder.Services.AddIdentity<IdentityUser, IdentityRole>()
+// =======================
+// IDENTITY
+// =======================
+builder.Services
+    .AddIdentity<IdentityUser, IdentityRole>()
     .AddEntityFrameworkStores<AppDbContext>()
     .AddDefaultTokenProviders();
 
+// Evitar redirección a login HTML (devolver 401/403 en API)
 builder.Services.ConfigureApplicationCookie(options =>
 {
     options.Events.OnRedirectToLogin = context =>
@@ -28,6 +44,7 @@ builder.Services.ConfigureApplicationCookie(options =>
         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
         return Task.CompletedTask;
     };
+
     options.Events.OnRedirectToAccessDenied = context =>
     {
         context.Response.StatusCode = StatusCodes.Status403Forbidden;
@@ -35,11 +52,17 @@ builder.Services.ConfigureApplicationCookie(options =>
     };
 });
 
+// =======================
+// JWT
+// =======================
 builder.Services.AddScoped<JwtTokenService>();
 
-var jwt = builder.Configuration.GetSection("Jwt");
-builder.Services.Configure<JwtSettings>(jwt);
-var key = Encoding.UTF8.GetBytes(jwt["Key"]!);
+var jwtSection = builder.Configuration.GetSection("Jwt");
+builder.Services.Configure<JwtSettings>(jwtSection);
+
+var key = Encoding.UTF8.GetBytes(jwtSection["Key"]!);
+
+// Usar JWT como esquema por defecto
 builder.Services
     .AddAuthentication(options =>
     {
@@ -47,55 +70,128 @@ builder.Services
         options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
         options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
     })
-    .AddJwtBearer(opts =>
+    .AddJwtBearer(options =>
     {
-        opts.TokenValidationParameters = new TokenValidationParameters
+        options.SaveToken = true;
+
+        options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
             ValidateAudience = true,
-            ValidIssuer = jwt["Issuer"],
-            ValidAudience = jwt["Audience"],
+            ValidIssuer = jwtSection["Issuer"],
+            ValidAudience = jwtSection["Audience"],
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(key),
             ClockSkew = TimeSpan.FromMinutes(1)
         };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnAuthenticationFailed = context =>
+            {
+                Console.WriteLine($"JWT error: {context.Exception.Message}");
+                return Task.CompletedTask;
+            },
+            OnTokenValidated = context =>
+            {
+                Console.WriteLine($"JWT OK para usuario: {context.Principal?.Identity?.Name}");
+                return Task.CompletedTask;
+            }
+        };
     });
 
-builder.Services.AddCors(opt => opt.AddPolicy("AppCors", p => p.AllowAnyHeader().AllowAnyMethod().AllowAnyOrigin()));
+// =======================
+// CORS
+// =======================
+builder.Services.AddCors(opt =>
+{
+    opt.AddPolicy("AppCors", p =>
+        p.AllowAnyHeader()
+         .AllowAnyMethod()
+         .AllowAnyOrigin());
+});
+
+// =======================
+// CONTROLLERS + SWAGGER
+// =======================
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
-    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Labotec API", Version = "v1" });
-    var bearer = new OpenApiSecurityScheme { Name="Authorization", Type=SecuritySchemeType.Http, Scheme="bearer", BearerFormat="JWT", In=ParameterLocation.Header };
-    c.AddSecurityDefinition("Bearer", bearer);
-    c.AddSecurityRequirement(new OpenApiSecurityRequirement { { bearer, Array.Empty<string>() } });
+    c.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "Labotec API",
+        Version = "v1"
+    });
+
+    var jwtSecurityScheme = new OpenApiSecurityScheme
+    {
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.Http,
+        Description = "Introduce solo el token JWT (sin la palabra 'Bearer').",
+        Reference = new OpenApiReference
+        {
+            Id = "Bearer",
+            Type = ReferenceType.SecurityScheme
+        }
+    };
+
+    // Definimos el esquema con la clave "Bearer"
+    c.AddSecurityDefinition(jwtSecurityScheme.Reference.Id, jwtSecurityScheme);
+
+    // Le decimos a Swagger que todos los endpoints usan este esquema
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        { jwtSecurityScheme, Array.Empty<string>() }
+    });
 });
 
-var provider = builder.Configuration.GetValue<string>("Storage:Provider")?.ToLowerInvariant() ?? "file";
-if (provider == "azure") builder.Services.AddScoped<IStorageService, AzureBlobService>();
-else builder.Services.AddScoped<IStorageService, FileStorageService>();
+// =======================
+// STORAGE (File o Azure)
+// =======================
+var provider = builder.Configuration
+    .GetValue<string>("Storage:Provider")?
+    .ToLowerInvariant() ?? "file";
+
+if (provider == "azure")
+{
+    builder.Services.AddScoped<IStorageService, AzureBlobService>();
+}
+else
+{
+    builder.Services.AddScoped<IStorageService, FileStorageService>();
+}
 
 var app = builder.Build();
 
+// =======================
+// PIPELINE HTTP
+// =======================
 app.UseSwagger();
-app.UseStaticFiles();
-app.UseSwaggerUI(c =>
-{
-    c.InjectJavascript("/swagger/swagger-custom.js");
-});
+app.UseSwaggerUI();
+
 app.UseSerilogRequestLogging();
+
 app.UseHttpsRedirection();
+app.UseStaticFiles();
+
 app.UseCors("AppCors");
+
 app.UseAuthentication();
 app.UseAuthorization();
+
 app.MapControllers();
 
+// =======================
+// MIGRACIONES + SEED
+// =======================
 using (var scope = app.Services.CreateScope())
 {
     var ctx = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-    // Ejecuta automáticamente las migraciones pendientes al iniciar la API
     var pending = await ctx.Database.GetPendingMigrationsAsync();
     if (pending.Any())
     {
@@ -108,9 +204,7 @@ using (var scope = app.Services.CreateScope())
         Console.WriteLine("No hay migraciones pendientes. La base de datos está actualizada.");
     }
 
-    // Ejecuta el seeding de datos iniciales (usuarios, roles, etc.)
     await Seed.Run(scope.ServiceProvider);
 }
-
 
 app.Run();
