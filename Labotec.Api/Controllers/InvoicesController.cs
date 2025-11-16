@@ -27,7 +27,15 @@ public class InvoicesController : ControllerBase
         [FromQuery] string sortDir = "asc")
     {
         var q = _db.Invoices.AsNoTracking().Include(i => i.Patient).AsQueryable();
-        if (patientId.HasValue) q = q.Where(i => i.PatientId == patientId.Value);
+        var currentPatientId = User.GetPatientId();
+        if (currentPatientId.HasValue)
+        {
+            q = q.Where(i => i.PatientId == currentPatientId.Value);
+        }
+        else if (patientId.HasValue)
+        {
+            q = q.Where(i => i.PatientId == patientId.Value);
+        }
         if (paid.HasValue) q = q.Where(i => i.Paid == paid.Value);
         if (from.HasValue) q = q.Where(i => i.IssuedAt >= from.Value);
         if (to.HasValue) q = q.Where(i => i.IssuedAt <= to.Value);
@@ -43,6 +51,7 @@ public class InvoicesController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Admin,Facturacion")]
     public async Task<ActionResult<InvoiceReadDto>> Create([FromBody] InvoiceCreateDto dto)
     {
         var patient = await _db.Patients.FindAsync(dto.PatientId);
@@ -67,6 +76,7 @@ public class InvoicesController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Roles = "Admin,Facturacion")]
     public async Task<IActionResult> Update(Guid id, [FromBody] InvoiceUpdateDto dto)
     {
         var i = await _db.Invoices.FindAsync(id);
@@ -88,6 +98,7 @@ public class InvoicesController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Roles = "Admin,Facturacion")]
     public async Task<IActionResult> Delete(Guid id)
     {
         var i = await _db.Invoices.FindAsync(id);

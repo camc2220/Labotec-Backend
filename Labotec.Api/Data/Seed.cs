@@ -7,7 +7,7 @@ public static class Seed
         using var scope = sp.CreateScope();
         var roleMgr = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
         var userMgr = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
-        var roles = new[] { "Admin", "Recepcion", "Facturacion" };
+        var roles = new[] { "Admin", "Recepcion", "Facturacion", "Paciente" };
         foreach (var r in roles) if (!await roleMgr.RoleExistsAsync(r)) await roleMgr.CreateAsync(new IdentityRole(r));
         var admin = await userMgr.FindByNameAsync("admin");
         if (admin is null)

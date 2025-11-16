@@ -30,6 +30,9 @@ namespace Labotec.Api.Auth
             var roles = await userManager.GetRolesAsync(user);
             claims.AddRange(roles.Select(r => new Claim(ClaimTypes.Role, r)));
 
+            var userClaims = await userManager.GetClaimsAsync(user);
+            claims.AddRange(userClaims);
+
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.Key));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 

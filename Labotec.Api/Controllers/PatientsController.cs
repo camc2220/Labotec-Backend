@@ -1,7 +1,11 @@
+using System.Security.Claims;
+using Labotec.Api.Auth;
 using Labotec.Api.Common;
 using Labotec.Api.Data;
 using Labotec.Api.DTOs;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,7 +17,13 @@ namespace Labotec.Api.Controllers;
 public class PatientsController : ControllerBase
 {
     private readonly AppDbContext _db;
-    public PatientsController(AppDbContext db) => _db = db;
+    private readonly UserManager<IdentityUser> _userManager;
+
+    public PatientsController(AppDbContext db, UserManager<IdentityUser> userManager)
+    {
+        _db = db;
+        _userManager = userManager;
+    }
 
     [HttpGet]
     public async Task<ActionResult<PagedResult<PatientReadDto>>> Get([FromQuery] string? q, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? sortBy = null, [FromQuery] string sortDir = "asc")
@@ -26,7 +36,7 @@ public class PatientsController : ControllerBase
         var data = await query
             .ApplyOrdering(sortBy, sortDir)
             .ApplyPaging(page, pageSize)
-            .Select(p => new PatientReadDto(p.Id, p.FullName, p.DocumentId, p.BirthDate, p.Email, p.Phone))
+            .Select(p => new PatientReadDto(p.Id, p.FullName, p.DocumentId, p.BirthDate, p.Email, p.Phone, p.UserId))
             .ToListAsync();
 
         return Ok(new PagedResult<PatientReadDto>(data, page, pageSize, total));
@@ -37,24 +47,66 @@ public class PatientsController : ControllerBase
     {
         var p = await _db.Patients.FindAsync(id);
         if (p is null) return NotFound();
-        return new PatientReadDto(p.Id, p.FullName, p.DocumentId, p.BirthDate, p.Email, p.Phone);
+        return new PatientReadDto(p.Id, p.FullName, p.DocumentId, p.BirthDate, p.Email, p.Phone, p.UserId);
     }
 
     [HttpPost]
     public async Task<ActionResult<PatientReadDto>> Create([FromBody] PatientCreateDto dto)
     {
+        if (string.IsNullOrWhiteSpace(dto.UserName)) return BadRequest("Nombre de usuario es requerido");
+        if (string.IsNullOrWhiteSpace(dto.Password)) return BadRequest("Contraseña es requerida");
+
+        var user = new IdentityUser
+        {
+            UserName = dto.UserName,
+            Email = dto.Email
+        };
+
+        var identityResult = await _userManager.CreateAsync(user, dto.Password);
+        if (!identityResult.Succeeded)
+        {
+            return BadRequest(identityResult.Errors);
+        }
+
+        var roleResult = await _userManager.AddToRoleAsync(user, "Paciente");
+        if (!roleResult.Succeeded)
+        {
+            await _userManager.DeleteAsync(user);
+            return StatusCode(StatusCodes.Status500InternalServerError, roleResult.Errors);
+        }
+
         var entity = new Domain.Patient
         {
             FullName = dto.FullName,
             DocumentId = dto.DocumentId,
             BirthDate = dto.BirthDate,
             Email = dto.Email,
-            Phone = dto.Phone
+            Phone = dto.Phone,
+            UserId = user.Id
         };
-        _db.Patients.Add(entity);
-        await _db.SaveChangesAsync();
 
-        var result = new PatientReadDto(entity.Id, entity.FullName, entity.DocumentId, entity.BirthDate, entity.Email, entity.Phone);
+        _db.Patients.Add(entity);
+
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch
+        {
+            await _userManager.DeleteAsync(user);
+            throw;
+        }
+
+        var claimResult = await _userManager.AddClaimAsync(user, new Claim(AppClaims.PatientId, entity.Id.ToString()));
+        if (!claimResult.Succeeded)
+        {
+            _db.Patients.Remove(entity);
+            await _db.SaveChangesAsync();
+            await _userManager.DeleteAsync(user);
+            return StatusCode(StatusCodes.Status500InternalServerError, claimResult.Errors);
+        }
+
+        var result = new PatientReadDto(entity.Id, entity.FullName, entity.DocumentId, entity.BirthDate, entity.Email, entity.Phone, entity.UserId);
         return CreatedAtAction(nameof(GetOne), new { id = entity.Id }, result);
     }
 
@@ -81,6 +133,12 @@ public class PatientsController : ControllerBase
 
         _db.Remove(p);
         await _db.SaveChangesAsync();
+
+        var user = await _userManager.FindByIdAsync(p.UserId);
+        if (user is not null)
+        {
+            await _userManager.DeleteAsync(user);
+        }
         return NoContent();
     }
 }

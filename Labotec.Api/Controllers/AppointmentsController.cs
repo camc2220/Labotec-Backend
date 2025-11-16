@@ -27,7 +27,15 @@ public class AppointmentsController : ControllerBase
         [FromQuery] string sortDir = "asc")
     {
         var q = _db.Appointments.AsNoTracking().Include(a => a.Patient).AsQueryable();
-        if (patientId.HasValue) q = q.Where(a => a.PatientId == patientId.Value);
+        var currentPatientId = User.GetPatientId();
+        if (currentPatientId.HasValue)
+        {
+            q = q.Where(a => a.PatientId == currentPatientId.Value);
+        }
+        else if (patientId.HasValue)
+        {
+            q = q.Where(a => a.PatientId == patientId.Value);
+        }
         if (from.HasValue) q = q.Where(a => a.ScheduledAt >= from.Value);
         if (to.HasValue) q = q.Where(a => a.ScheduledAt <= to.Value);
         if (!string.IsNullOrWhiteSpace(status)) q = q.Where(a => a.Status == status);
@@ -45,12 +53,23 @@ public class AppointmentsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<AppointmentReadDto>> Create([FromBody] AppointmentCreateDto dto)
     {
-        var patient = await _db.Patients.FindAsync(dto.PatientId);
+        var currentPatientId = User.GetPatientId();
+        var requestedPatientId = dto.PatientId;
+        if (currentPatientId.HasValue)
+        {
+            if (requestedPatientId != Guid.Empty && requestedPatientId != currentPatientId.Value)
+            {
+                return Forbid();
+            }
+            requestedPatientId = currentPatientId.Value;
+        }
+
+        var patient = await _db.Patients.FindAsync(requestedPatientId);
         if (patient is null) return BadRequest("Paciente no existe");
 
         var entity = new Domain.Appointment
         {
-            PatientId = dto.PatientId,
+            PatientId = requestedPatientId,
             ScheduledAt = dto.ScheduledAt,
             Type = dto.Type,
             Notes = dto.Notes,
@@ -64,6 +83,7 @@ public class AppointmentsController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Roles = "Admin,Recepcion")]
     public async Task<IActionResult> Update(Guid id, [FromBody] AppointmentUpdateDto dto)
     {
         var a = await _db.Appointments.FindAsync(id);
@@ -79,6 +99,7 @@ public class AppointmentsController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Roles = "Admin,Recepcion")]
     public async Task<IActionResult> Delete(Guid id)
     {
         var a = await _db.Appointments.FindAsync(id);

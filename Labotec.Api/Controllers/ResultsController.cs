@@ -28,7 +28,15 @@ public class ResultsController : ControllerBase
         [FromQuery] string sortDir = "asc")
     {
         var q = _db.LabResults.AsNoTracking().Include(r => r.Patient).AsQueryable();
-        if (patientId.HasValue) q = q.Where(r => r.PatientId == patientId.Value);
+        var currentPatientId = User.GetPatientId();
+        if (currentPatientId.HasValue)
+        {
+            q = q.Where(r => r.PatientId == currentPatientId.Value);
+        }
+        else if (patientId.HasValue)
+        {
+            q = q.Where(r => r.PatientId == patientId.Value);
+        }
         if (from.HasValue) q = q.Where(r => r.ReleasedAt >= from.Value);
         if (to.HasValue) q = q.Where(r => r.ReleasedAt <= to.Value);
         if (!string.IsNullOrWhiteSpace(test)) q = q.Where(r => r.TestName.Contains(test));
@@ -44,6 +52,7 @@ public class ResultsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Admin,Recepcion")]
     public async Task<ActionResult<LabResultReadDto>> Create([FromBody] LabResultCreateDto dto)
     {
         var patient = await _db.Patients.FindAsync(dto.PatientId);
@@ -66,6 +75,7 @@ public class ResultsController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Roles = "Admin,Recepcion")]
     public async Task<IActionResult> Update(Guid id, [FromBody] LabResultUpdateDto dto)
     {
         var r = await _db.LabResults.FindAsync(id);
@@ -82,6 +92,7 @@ public class ResultsController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Roles = "Admin,Recepcion")]
     public async Task<IActionResult> Delete(Guid id)
     {
         var r = await _db.LabResults.FindAsync(id);
@@ -93,6 +104,7 @@ public class ResultsController : ControllerBase
     }
 
     [HttpPost("{id:guid}/pdf")]
+    [Authorize(Roles = "Admin,Recepcion")]
     [RequestSizeLimit(20_000_000)]
     public async Task<IActionResult> UploadPdf(Guid id, IFormFile file, [FromServices] IStorageService storage)
     {
@@ -117,6 +129,9 @@ public class ResultsController : ControllerBase
     {
         var r = await _db.LabResults.FindAsync(id);
         if (r is null || string.IsNullOrWhiteSpace(r.PdfUrl)) return NotFound();
+
+        var patientId = User.GetPatientId();
+        if (patientId.HasValue && r.PatientId != patientId.Value) return Forbid();
 
         var fileName = $"results/{id}.pdf";
         var url = storage.GetAccessUrl(fileName, TimeSpan.FromMinutes(minutes));

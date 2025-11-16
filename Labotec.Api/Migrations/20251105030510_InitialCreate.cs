@@ -82,6 +82,8 @@ namespace Labotec.Api.Migrations
                     Email = table.Column<string>(type: "longtext", nullable: true)
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     Phone = table.Column<string>(type: "longtext", nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    UserId = table.Column<string>(type: "varchar(255)", maxLength: 255, nullable: false)
                         .Annotation("MySql:CharSet", "utf8mb4")
                 },
                 constraints: table =>
@@ -362,6 +364,12 @@ namespace Labotec.Api.Migrations
                 name: "IX_Patients_DocumentId",
                 table: "Patients",
                 column: "DocumentId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Patients_UserId",
+                table: "Patients",
+                column: "UserId",
                 unique: true);
         }
 
