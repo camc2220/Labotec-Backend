@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using Labotec.Api.Common;
 using Labotec.Api.Data;
 using Labotec.Api.DTOs;
@@ -49,6 +51,69 @@ public class ResultsController : ControllerBase
             .ToListAsync();
 
         return Ok(new PagedResult<LabResultReadDto>(data, page, pageSize, total));
+    }
+
+    [HttpGet("print")]
+    public async Task<IActionResult> Print(
+        [FromQuery] Guid? patientId,
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        [FromQuery] string? test,
+        [FromQuery] string? sortBy = null,
+        [FromQuery] string sortDir = "asc")
+    {
+        var q = _db.LabResults.AsNoTracking().Include(r => r.Patient).AsQueryable();
+        var currentPatientId = User.GetPatientId();
+        if (currentPatientId.HasValue)
+        {
+            q = q.Where(r => r.PatientId == currentPatientId.Value);
+        }
+        else if (patientId.HasValue)
+        {
+            q = q.Where(r => r.PatientId == patientId.Value);
+        }
+        if (from.HasValue) q = q.Where(r => r.ReleasedAt >= from.Value);
+        if (to.HasValue) q = q.Where(r => r.ReleasedAt <= to.Value);
+        if (!string.IsNullOrWhiteSpace(test)) q = q.Where(r => r.TestName.Contains(test));
+
+        var data = await q
+            .ApplyOrdering(sortBy, sortDir)
+            .Select(r => new
+            {
+                r.Id,
+                r.PatientId,
+                PatientName = r.Patient.FullName,
+                r.TestName,
+                r.ResultValue,
+                r.Unit,
+                r.ReleasedAt,
+                r.PdfUrl
+            })
+            .ToListAsync();
+
+        var rows = new List<IEnumerable<string?>>
+        {
+            new[] { "ID", "Paciente", "Prueba", "Resultado", "Unidad", "Fecha", "PDF" }
+        };
+
+        foreach (var item in data)
+        {
+            rows.Add(new[]
+            {
+                item.Id.ToString(),
+                item.PatientName,
+                item.TestName,
+                item.ResultValue,
+                item.Unit,
+                item.ReleasedAt.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture),
+                item.PdfUrl
+            });
+        }
+
+        var csv = CsvBuilder.Build(rows);
+        var bytes = Encoding.UTF8.GetBytes(csv);
+        var fileName = $"resultados-{DateTime.UtcNow:yyyyMMddHHmmss}.csv";
+        return File(bytes, "text/csv", fileName);
     }
 
     [HttpPost]
