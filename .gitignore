@@ -1,6 +1,5 @@
-/bin
-/Common
-/Models
+bin/
+CommonModels/
 appsettings.json
 appsettings.Development.json
-\obj
+obj/
