@@ -29,6 +29,12 @@ public class PatientsController : ControllerBase
     public async Task<ActionResult<PagedResult<PatientReadDto>>> Get([FromQuery] string? q, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? sortBy = null, [FromQuery] string sortDir = "asc")
     {
         var query = _db.Patients.AsNoTracking().AsQueryable();
+
+        var currentPatientId = User.GetPatientId();
+        if (currentPatientId.HasValue)
+        {
+            query = query.Where(p => p.Id == currentPatientId.Value);
+        }
         if (!string.IsNullOrWhiteSpace(q))
             query = query.Where(p => p.FullName.Contains(q) || p.DocumentId.Contains(q));
 
@@ -47,6 +53,9 @@ public class PatientsController : ControllerBase
     {
         var p = await _db.Patients.FindAsync(id);
         if (p is null) return NotFound();
+
+        var currentPatientId = User.GetPatientId();
+        if (currentPatientId.HasValue && p.Id != currentPatientId.Value) return Forbid();
         return new PatientReadDto(p.Id, p.FullName, p.DocumentId, p.BirthDate, p.Email, p.Phone, p.UserId);
     }
 
@@ -116,6 +125,9 @@ public class PatientsController : ControllerBase
         var p = await _db.Patients.FindAsync(id);
         if (p is null) return NotFound();
 
+        var currentPatientId = User.GetPatientId();
+        if (currentPatientId.HasValue && p.Id != currentPatientId.Value) return Forbid();
+
         p.FullName = dto.FullName;
         p.BirthDate = dto.BirthDate;
         p.Email = dto.Email;
@@ -130,6 +142,9 @@ public class PatientsController : ControllerBase
     {
         var p = await _db.Patients.FindAsync(id);
         if (p is null) return NotFound();
+
+        var currentPatientId = User.GetPatientId();
+        if (currentPatientId.HasValue && p.Id != currentPatientId.Value) return Forbid();
 
         _db.Remove(p);
         await _db.SaveChangesAsync();
