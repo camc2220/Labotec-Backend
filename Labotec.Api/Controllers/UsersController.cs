@@ -1,3 +1,4 @@
+using Labotec.Api.Auth;
 using Labotec.Api.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -80,6 +81,13 @@ public class UsersController : ControllerBase
                 {
                     return BadRequest(new { message = $"El rol '{role}' no existe." });
                 }
+            }
+
+            var userClaims = await _userManager.GetClaimsAsync(user);
+            var isPatient = userClaims.Any(c => c.Type == AppClaims.PatientId);
+            if (isPatient && requestedRoles.Any(r => string.Equals(r, "Admin", StringComparison.OrdinalIgnoreCase)))
+            {
+                return BadRequest(new { message = "Un paciente no puede tener el rol de administrador." });
             }
 
             var currentRoles = await _userManager.GetRolesAsync(user);

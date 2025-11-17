@@ -27,10 +27,15 @@ namespace Labotec.Api.Auth
                 new Claim(JwtRegisteredClaimNames.Email, user.Email ?? string.Empty)
             };
 
-            var roles = await userManager.GetRolesAsync(user);
-            claims.AddRange(roles.Select(r => new Claim(ClaimTypes.Role, r)));
-
             var userClaims = await userManager.GetClaimsAsync(user);
+            var isPatient = userClaims.Any(c => c.Type == AppClaims.PatientId);
+
+            var roles = await userManager.GetRolesAsync(user);
+            var filteredRoles = isPatient
+                ? roles.Where(r => !string.Equals(r, "Admin", StringComparison.OrdinalIgnoreCase))
+                : roles;
+            claims.AddRange(filteredRoles.Select(r => new Claim(ClaimTypes.Role, r)));
+
             claims.AddRange(userClaims);
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.Key));
