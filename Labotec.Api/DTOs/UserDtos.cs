@@ -18,6 +18,19 @@ public record UserReadDto(
     DateTimeOffset? LockoutEnd);
 
 /// <summary>
+/// Solicitud para crear un nuevo usuario desde el panel administrativo.
+/// </summary>
+/// <param name="UserName">Nombre de usuario.</param>
+/// <param name="Email">Correo electrónico.</param>
+/// <param name="Password">Contraseña inicial.</param>
+/// <param name="Roles">Roles que se asignarán al usuario. Si no se especifican no se asigna ninguno.</param>
+public record UserCreateDto(
+    string UserName,
+    string Email,
+    string Password,
+    IReadOnlyCollection<string>? Roles);
+
+/// <summary>
 /// Solicitud para modificar datos básicos de un usuario.
 /// </summary>
 /// <param name="UserName">Nuevo nombre de usuario (opcional).</param>
@@ -29,3 +42,12 @@ public record UserUpdateDto(
     string? Email,
     IReadOnlyCollection<string>? Roles,
     bool? Lockout);
+
+/// <summary>
+/// Solicitud para que el propio usuario cambie su contraseña.
+/// </summary>
+/// <param name="CurrentPassword">Contraseña actual para validar la solicitud.</param>
+/// <param name="NewPassword">Nueva contraseña a establecer.</param>
+public record UserChangePasswordDto(
+    string CurrentPassword,
+    string NewPassword);

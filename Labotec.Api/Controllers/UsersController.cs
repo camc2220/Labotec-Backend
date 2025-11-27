@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System;
 using System.Security.Claims;
 using System.Linq;
 
@@ -10,7 +11,6 @@ namespace Labotec.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Admin")]
 public class UsersController : ControllerBase
 {
     private readonly UserManager<IdentityUser> _userManager;
@@ -24,6 +24,47 @@ public class UsersController : ControllerBase
         _roleManager = roleManager;
     }
 
+    [Authorize(Roles = "Admin")]
+    [HttpPost]
+    public async Task<ActionResult<UserReadDto>> Create([FromBody] UserCreateDto dto)
+    {
+        var user = new IdentityUser
+        {
+            UserName = dto.UserName,
+            Email = dto.Email
+        };
+
+        var createResult = await _userManager.CreateAsync(user, dto.Password);
+        if (!createResult.Succeeded)
+        {
+            return BadRequest(createResult.Errors);
+        }
+
+        if (dto.Roles is not null)
+        {
+            var requestedRoles = dto.Roles.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+            foreach (var role in requestedRoles)
+            {
+                if (!await _roleManager.RoleExistsAsync(role))
+                {
+                    await _userManager.DeleteAsync(user);
+                    return BadRequest(new { message = $"El rol '{role}' no existe." });
+                }
+            }
+
+            var addResult = await _userManager.AddToRolesAsync(user, requestedRoles);
+            if (!addResult.Succeeded)
+            {
+                await _userManager.DeleteAsync(user);
+                return BadRequest(addResult.Errors);
+            }
+        }
+
+        return CreatedAtAction(nameof(GetById), new { id = user.Id }, await ToReadDto(user));
+    }
+
+    [Authorize(Roles = "Admin")]
     [HttpGet]
     public async Task<ActionResult<IEnumerable<UserReadDto>>> GetAll()
     {
@@ -40,6 +81,7 @@ public class UsersController : ControllerBase
         return Ok(result);
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpGet("{id}")]
     public async Task<ActionResult<UserReadDto>> GetById(string id)
     {
@@ -48,6 +90,7 @@ public class UsersController : ControllerBase
         return Ok(await ToReadDto(user));
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpPut("{id}")]
     public async Task<ActionResult<UserReadDto>> Update(string id, [FromBody] UserUpdateDto dto)
     {
@@ -115,6 +158,7 @@ public class UsersController : ControllerBase
         return Ok(await ToReadDto(user));
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(string id)
     {
@@ -131,6 +175,31 @@ public class UsersController : ControllerBase
         if (!result.Succeeded)
         {
             return BadRequest(result.Errors);
+        }
+
+        return NoContent();
+    }
+
+    [Authorize]
+    [HttpPost("{id}/change-password")]
+    public async Task<IActionResult> ChangePassword(string id, [FromBody] UserChangePasswordDto dto)
+    {
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (currentUserId != id)
+        {
+            return Forbid();
+        }
+
+        var user = await _userManager.FindByIdAsync(id);
+        if (user is null)
+        {
+            return NotFound();
+        }
+
+        var changeResult = await _userManager.ChangePasswordAsync(user, dto.CurrentPassword, dto.NewPassword);
+        if (!changeResult.Succeeded)
+        {
+            return BadRequest(changeResult.Errors);
         }
 
         return NoContent();
