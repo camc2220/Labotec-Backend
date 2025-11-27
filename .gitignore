@@ -21,9 +21,9 @@ Migrations/*Designer.cs
 Migrations/*.ModelSnapshot.cs
 
 # Sensitive configs
-appsettings.Local.json
-appsettings.Development.json
-appsettings.*.json
+**/appsettings.Local.json
+**/appsettings.Development.json
+**/appsettings.*.json
 **/secrets.json
 
 # Keys
