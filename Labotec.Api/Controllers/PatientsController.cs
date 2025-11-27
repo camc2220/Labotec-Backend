@@ -106,6 +106,7 @@ public class PatientsController : ControllerBase
             throw;
         }
 
+        // AQUÍ ES CLAVE: Usamos AppClaims.PatientId que ahora vale "patientId" (minúscula)
         var claimResult = await _userManager.AddClaimAsync(user, new Claim(AppClaims.PatientId, entity.Id.ToString()));
         if (!claimResult.Succeeded)
         {

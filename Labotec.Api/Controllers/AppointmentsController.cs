@@ -28,6 +28,7 @@ public class AppointmentsController : ControllerBase
     {
         var q = _db.Appointments.AsNoTracking().Include(a => a.Patient).AsQueryable();
         var currentPatientId = User.GetPatientId();
+
         if (currentPatientId.HasValue)
         {
             q = q.Where(a => a.PatientId == currentPatientId.Value);
@@ -36,6 +37,7 @@ public class AppointmentsController : ControllerBase
         {
             q = q.Where(a => a.PatientId == patientId.Value);
         }
+
         if (from.HasValue) q = q.Where(a => a.ScheduledAt >= from.Value);
         if (to.HasValue) q = q.Where(a => a.ScheduledAt <= to.Value);
         if (!string.IsNullOrWhiteSpace(status)) q = q.Where(a => a.Status == status);
@@ -44,23 +46,34 @@ public class AppointmentsController : ControllerBase
         var data = await q
             .ApplyOrdering(sortBy, sortDir)
             .ApplyPaging(page, pageSize)
-            .Select(a => new AppointmentReadDto(a.Id, a.PatientId, a.Patient.FullName, a.ScheduledAt, a.Type, a.Status, a.Notes))
+            .Select(a => new AppointmentReadDto(
+                a.Id,
+                a.PatientId,
+                a.Patient.FullName,
+                a.ScheduledAt,
+                a.Type,
+                a.Status,
+                a.Notes))
             .ToListAsync();
 
         return Ok(new PagedResult<AppointmentReadDto>(data, page, pageSize, total));
     }
 
+    // ----------------------------------------------------
+    // ? CORRECCIÓN IMPORTANTE ? Solo Admin y Recepción pueden crear
+    // ----------------------------------------------------
     [HttpPost]
+    [Authorize(Roles = "Admin,Recepcion")]
     public async Task<ActionResult<AppointmentReadDto>> Create([FromBody] AppointmentCreateDto dto)
     {
         var currentPatientId = User.GetPatientId();
         var requestedPatientId = dto.PatientId;
+
         if (currentPatientId.HasValue)
         {
             if (requestedPatientId != Guid.Empty && requestedPatientId != currentPatientId.Value)
-            {
                 return Forbid();
-            }
+
             requestedPatientId = currentPatientId.Value;
         }
 
@@ -75,10 +88,20 @@ public class AppointmentsController : ControllerBase
             Notes = dto.Notes,
             Status = "Scheduled"
         };
+
         _db.Appointments.Add(entity);
         await _db.SaveChangesAsync();
 
-        var result = new AppointmentReadDto(entity.Id, patient.Id, patient.FullName, entity.ScheduledAt, entity.Type, entity.Status, entity.Notes);
+        var result = new AppointmentReadDto(
+            entity.Id,
+            patient.Id,
+            patient.FullName,
+            entity.ScheduledAt,
+            entity.Type,
+            entity.Status,
+            entity.Notes
+        );
+
         return CreatedAtAction(nameof(Create), new { id = entity.Id }, result);
     }
 
