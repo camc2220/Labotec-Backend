@@ -1,0 +1,37 @@
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: LabotecDb
+      MYSQL_USER: labotec
+      MYSQL_PASSWORD: SuperClave!2025
+      MYSQL_ROOT_PASSWORD: root
+    ports: ["3307:3306"]
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      interval: 5s
+      retries: 30
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  api:
+    build: ./Labotec.Api
+    environment:
+      ConnectionStrings__Default: "Server=mysql;Port=3306;Database=LabotecDb;User=labotec;Password=SuperClave!2025;"
+      Jwt__Issuer: "Labotec.Api"
+      Jwt__Audience: "Labotec.Client"
+      Jwt__Key: "EsteEsUnSecretoJwtDeAlMenos32Caracteres!!"
+      Storage__Provider: "File"
+      Storage__File__BasePath: "wwwroot/uploads"
+      Storage__File__PublicBaseUrl: "http://localhost:8080"
+      ASPNETCORE_URLS: "http://+:8080"
+    ports: ["8080:8080"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - api_uploads:/app/wwwroot/uploads
+
+volumes:
+  mysql_data:
+  api_uploads:
