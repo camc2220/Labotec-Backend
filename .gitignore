@@ -25,6 +25,7 @@ Migrations/*.ModelSnapshot.cs
 **/appsettings.Development.json
 **/appsettings.*.json
 **/secrets.json
+**/appsettings.json
 
 # Keys
 *.pfx
