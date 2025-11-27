@@ -25,23 +25,14 @@ namespace Labotec.Api.Auth
                 new Claim(JwtRegisteredClaimNames.Email, user.Email ?? string.Empty)
             };
 
-            // 1. Obtener Claims de la base de datos (aquí viene el patientId)
+            // 1. Obtener Claims de la base de datos (aqu viene el patientId)
             var userClaims = await userManager.GetClaimsAsync(user);
 
-            // 2. Verificar si es paciente usando la constante correcta
-            var isPatient = userClaims.Any(c => c.Type == AppClaims.PatientId);
-
-            // 3. Obtener Roles
+            // 2. Obtener Roles sin filtrar para permitir combinaciones (p. ej. Admin + Paciente)
             var roles = await userManager.GetRolesAsync(user);
+            claims.AddRange(roles.Select(r => new Claim(ClaimTypes.Role, r)));
 
-            // 4. Si es paciente, ocultamos el rol Admin para evitar confusiones de seguridad en el frontend
-            var filteredRoles = isPatient
-                ? roles.Where(r => !string.Equals(r, "Admin", StringComparison.OrdinalIgnoreCase))
-                : roles;
-
-            claims.AddRange(filteredRoles.Select(r => new Claim(ClaimTypes.Role, r)));
-
-            // 5. Agregar los claims del usuario (incluyendo patientId) al token final
+            // 3. Agregar los claims del usuario (incluyendo patientId) al token final
             claims.AddRange(userClaims);
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.Key));

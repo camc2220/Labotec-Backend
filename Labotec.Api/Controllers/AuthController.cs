@@ -1,7 +1,11 @@
-﻿
+
+using System.Security.Claims;
 using Labotec.Api.Auth;
+using Labotec.Api.Data;
 using Labotec.Api.DTOs;
+using Labotec.Api.Domain;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
@@ -14,15 +18,18 @@ namespace Labotec.Api.Controllers
         private readonly UserManager<IdentityUser> _userManager;
         private readonly SignInManager<IdentityUser> _signInManager;
         private readonly JwtTokenService _jwt;
+        private readonly AppDbContext _db;
 
         public AuthController(
             UserManager<IdentityUser> userManager,
             SignInManager<IdentityUser> signInManager,
-            JwtTokenService jwt)
+            JwtTokenService jwt,
+            AppDbContext db)
         {
             _userManager = userManager;
             _signInManager = signInManager;
             _jwt = jwt;
+            _db = db;
         }
 
         // ===========================
@@ -45,17 +52,41 @@ namespace Labotec.Api.Controllers
                 return BadRequest(result.Errors);
             }
 
-            // ⚠️ AQUÍ ESTABA EL PROBLEMA ANTES:
-            // Antes: todos los usuarios quedaban como "Admin".
-            // await _userManager.AddToRoleAsync(user, "Admin");
+            var patient = new Patient
+            {
+                FullName = dto.FullName,
+                DocumentId = dto.DocumentId,
+                BirthDate = dto.BirthDate,
+                Email = dto.Email,
+                Phone = dto.Phone,
+                UserId = user.Id
+            };
 
-            // ✅ Ahora: rol por defecto más "normalito"
-            await _userManager.AddToRoleAsync(user, "Recepcion");
-            // Si prefieres "Facturacion", solo cambia el texto:
-            // await _userManager.AddToRoleAsync(user, "Facturacion");
+            _db.Patients.Add(patient);
+
+            try
+            {
+                await _db.SaveChangesAsync();
+            }
+            catch
+            {
+                await _userManager.DeleteAsync(user);
+                throw;
+            }
+
+            var claimResult = await _userManager.AddClaimAsync(user, new Claim(AppClaims.PatientId, patient.Id.ToString()));
+            if (!claimResult.Succeeded)
+            {
+                _db.Patients.Remove(patient);
+                await _db.SaveChangesAsync();
+                await _userManager.DeleteAsync(user);
+                return StatusCode(StatusCodes.Status500InternalServerError, claimResult.Errors);
+            }
+
+            await _userManager.AddToRoleAsync(user, "Paciente");
 
             var token = await _jwt.CreateAsync(user, _userManager);
-            return Ok(new { token });
+            return Ok(new { token, patientId = patient.Id });
         }
 
         // ===========================
