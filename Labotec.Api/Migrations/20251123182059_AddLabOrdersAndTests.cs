@@ -27,16 +27,21 @@ namespace Labotec.Api.Migrations
                 DEALLOCATE PREPARE dropIndexStmt;
             ");
 
-            migrationBuilder.AlterColumn<string>(
-                name: "UserId",
-                table: "Patients",
-                type: "longtext",
-                nullable: false,
-                oldClrType: typeof(string),
-                oldType: "varchar(255)",
-                oldMaxLength: 255)
-                .Annotation("MySql:CharSet", "utf8mb4")
-                .OldAnnotation("MySql:CharSet", "utf8mb4");
+            migrationBuilder.Sql(@"
+                SET @columnExists := (
+                    SELECT COUNT(1)
+                    FROM INFORMATION_SCHEMA.COLUMNS
+                    WHERE TABLE_SCHEMA = DATABASE()
+                        AND TABLE_NAME = 'Patients'
+                        AND COLUMN_NAME = 'UserId'
+                );
+                SET @userIdSql := IF(@columnExists > 0,
+                    'ALTER TABLE `Patients` MODIFY COLUMN `UserId` longtext CHARACTER SET utf8mb4 NOT NULL',
+                    'ALTER TABLE `Patients` ADD COLUMN `UserId` longtext CHARACTER SET utf8mb4 NOT NULL');
+                PREPARE userIdStmt FROM @userIdSql;
+                EXECUTE userIdStmt;
+                DEALLOCATE PREPARE userIdStmt;
+            ");
 
             migrationBuilder.CreateTable(
                 name: "LabOrders",
