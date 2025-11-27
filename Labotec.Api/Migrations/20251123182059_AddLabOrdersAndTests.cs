@@ -11,9 +11,21 @@ namespace Labotec.Api.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropIndex(
-                name: "IX_Patients_UserId",
-                table: "Patients");
+            migrationBuilder.Sql(@"
+                SET @indexExists := (
+                    SELECT COUNT(1)
+                    FROM INFORMATION_SCHEMA.STATISTICS
+                    WHERE TABLE_SCHEMA = DATABASE()
+                        AND TABLE_NAME = 'Patients'
+                        AND INDEX_NAME = 'IX_Patients_UserId'
+                );
+                SET @dropIndexSql := IF(@indexExists > 0,
+                    'DROP INDEX `IX_Patients_UserId` ON `Patients`',
+                    'SELECT 1');
+                PREPARE dropIndexStmt FROM @dropIndexSql;
+                EXECUTE dropIndexStmt;
+                DEALLOCATE PREPARE dropIndexStmt;
+            ");
 
             migrationBuilder.AlterColumn<string>(
                 name: "UserId",
