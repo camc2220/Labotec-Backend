@@ -29,6 +29,7 @@ namespace Labotec.Api.Auth
             };
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
             // 1. Obtener Claims de la base de datos (aqu viene el patientId)
             var userClaims = await userManager.GetClaimsAsync(user);
 
@@ -37,6 +38,16 @@ namespace Labotec.Api.Auth
             claims.AddRange(roles.Select(r => new Claim(ClaimTypes.Role, r)));
 
             // 3. Agregar los claims del usuario (incluyendo patientId) al token final
+=======
+            // Claims de la BD (aquí viene patientId)
+            var userClaims = await userManager.GetClaimsAsync(user);
+
+            // Roles
+            var roles = await userManager.GetRolesAsync(user);
+            claims.AddRange(roles.Select(r => new Claim(ClaimTypes.Role, r)));
+
+            // Agregar claims extra (patientId, etc.)
+>>>>>>> Stashed changes
 =======
             // Claims de la BD (aquí viene patientId)
             var userClaims = await userManager.GetClaimsAsync(user);
